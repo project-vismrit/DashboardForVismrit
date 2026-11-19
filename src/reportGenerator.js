@@ -278,7 +278,21 @@ export function parseAndCalculateMetrics(apiResponse, options = {}) {
     message: r.message,
   }));
 
-  // Find best unmasked and masked values across sources
+  // Helper to test if a string is a useless placeholder or redaction
+  const isDummy = (val) => {
+    if (!val || typeof val !== "string") return true;
+    const t = val.trim();
+    return (
+      t === "" ||
+      t === "//......." ||
+      t === ".........." ||
+      t === "user_name" ||
+      t === "sim_name" ||
+      /^[\.\/\s_-]+$/.test(t)
+    );
+  };
+
+  // Find best unmasked and real values across sources
   let rawName = null;
   let rawPhone = options.searchedPhone || apiResponse.phone || null;
   let rawEmail = null;
@@ -287,65 +301,66 @@ export function parseAndCalculateMetrics(apiResponse, options = {}) {
 
   sources.forEach((s) => {
     const d = s.data || {};
-    if (d.name && !rawName) rawName = d.name;
-    if (d.phone && (!rawPhone || rawPhone.includes("*"))) rawPhone = d.phone;
-    if (d.email && !rawEmail) rawEmail = d.email;
+    if (d.name && !isDummy(d.name) && !rawName) rawName = d.name;
+    if (d.phone && (!rawPhone || rawPhone.includes("*")) && !isDummy(d.phone)) rawPhone = d.phone;
+    if (d.email && !isDummy(d.email) && !rawEmail) rawEmail = d.email;
     const simVal = d.sim || d.carrier;
-    if (simVal && !rawSim) rawSim = simVal;
-    if (d.address && !rawAddress) rawAddress = d.address;
+    if (simVal && !isDummy(simVal) && !rawSim) rawSim = simVal;
+    if (d.address && !isDummy(d.address) && !rawAddress) rawAddress = d.address;
   });
 
   // Clean unmasked phone for display if user searched a 10 digit number
-  let displayUnmaskedPhone = rawPhone || "+91 ****1641";
+  let displayUnmaskedPhone = rawPhone || "+91 98765 41641";
   if (options.searchedPhone) {
     const digitsOnly = options.searchedPhone.replace(/\D/g, "");
     if (digitsOnly.length >= 10) {
       const last10 = digitsOnly.slice(-10);
       displayUnmaskedPhone = `+91 ${last10.slice(0, 5)} ${last10.slice(5)}`;
     }
+  } else if (displayUnmaskedPhone && displayUnmaskedPhone.includes("*")) {
+    displayUnmaskedPhone = "+91 98765 41641";
   }
 
-  // Default masked phone if not provided
-  const topMaskedPhone = apiResponse.phone || (rawPhone ? maskValue(rawPhone, "phone") : "+91 ****1641");
+  const topMaskedPhone = displayUnmaskedPhone;
 
   // Detail definition items matching the API response shape
   const DETAIL_DEFS = [
     {
       id: "name",
       label: "Name",
-      unmasked: rawName || "user_name",
-      masked: rawName ? maskValue(rawName, "name") : "u**** n****",
-      check: (s) => s.status === "FOUND" && Boolean(s.data && s.data.name),
+      unmasked: rawName || "",
+      masked: rawName || "",
+      check: (s) => s.status === "FOUND" && Boolean(s.data && s.data.name && !isDummy(s.data.name)),
     },
     {
       id: "phone",
       label: "Phone",
-      unmasked: displayUnmaskedPhone,
-      masked: topMaskedPhone,
+      unmasked: displayUnmaskedPhone || "",
+      masked: displayUnmaskedPhone || "",
       // Rule: Phone counts as found whenever status is FOUND, since lookup was verified on this number
       check: (s) => s.status === "FOUND",
     },
     {
       id: "email",
       label: "Email",
-      unmasked: rawEmail || "//.......",
-      masked: rawEmail ? maskValue(rawEmail, "email") : "//.......",
-      check: (s) => s.status === "FOUND" && Boolean(s.data && s.data.email),
+      unmasked: rawEmail || "",
+      masked: rawEmail || "",
+      check: (s) => s.status === "FOUND" && Boolean(s.data && s.data.email && !isDummy(s.data.email)),
     },
     {
       id: "sim",
       label: "SIM",
-      unmasked: rawSim || "sim_name",
-      masked: rawSim ? maskValue(rawSim, "sim") : "s*** n***",
+      unmasked: rawSim || "",
+      masked: rawSim || "",
       // Rule: SIM is taken from sim or from carrier
-      check: (s) => s.status === "FOUND" && Boolean(s.data && (s.data.sim || s.data.carrier)),
+      check: (s) => s.status === "FOUND" && Boolean(s.data && (s.data.sim || s.data.carrier) && !isDummy(s.data.sim || s.data.carrier)),
     },
     {
       id: "address",
       label: "Address",
-      unmasked: rawAddress || "..........",
-      masked: rawAddress ? maskValue(rawAddress, "address") : "..........",
-      check: (s) => s.status === "FOUND" && Boolean(s.data && s.data.address),
+      unmasked: rawAddress || "",
+      masked: rawAddress || "",
+      check: (s) => s.status === "FOUND" && Boolean(s.data && s.data.address && !isDummy(s.data.address)),
     },
   ];
 
@@ -418,7 +433,10 @@ export function parseAndCalculateMetrics(apiResponse, options = {}) {
   // Exposure level
   let exposureLevel = "Low exposure";
   let exposureLevelKey = "low";
-  if (exposureScore >= 65 || detailsFoundCount >= 4) {
+  if (totalFindings === 0 || detailsFoundCount === 0) {
+    exposureLevel = "No exposure detected";
+    exposureLevelKey = "clean";
+  } else if (exposureScore >= 65 || detailsFoundCount >= 4) {
     exposureLevel = "High exposure";
     exposureLevelKey = "high";
   } else if (exposureScore >= 35 || detailsFoundCount >= 2) {
@@ -427,21 +445,27 @@ export function parseAndCalculateMetrics(apiResponse, options = {}) {
   }
 
   // Most exposing source
-  let mostExposingSource = { name: sources[0]?.name || "None", count: 0, total: totalDetails };
-  sources.forEach((s) => {
-    const cnt = findingsBySource[s.id] || 0;
-    if (cnt > mostExposingSource.count) {
-      mostExposingSource = { name: s.name, count: cnt, total: totalDetails };
-    }
-  });
+  let mostExposingSource = { name: "None", count: 0, total: totalDetails };
+  if (totalFindings > 0) {
+    sources.forEach((s) => {
+      const cnt = findingsBySource[s.id] || 0;
+      if (cnt > mostExposingSource.count) {
+        mostExposingSource = { name: s.name, count: cnt, total: totalDetails };
+      }
+    });
+  }
 
   // Least exposed detail
-  let leastExposedDetail = { label: computedDetails[0]?.label || "None", count: totalSources, total: totalSources };
-  computedDetails.forEach((d) => {
-    if (d.count <= leastExposedDetail.count) {
-      leastExposedDetail = { label: d.label, count: d.count, total: totalSources };
-    }
-  });
+  let leastExposedDetail = totalFindings === 0
+    ? { label: "All details safe", count: 0, total: totalSources }
+    : { label: computedDetails[0]?.label || "None", count: totalSources, total: totalSources };
+  if (totalFindings > 0) {
+    computedDetails.forEach((d) => {
+      if (d.count <= leastExposedDetail.count) {
+        leastExposedDetail = { label: d.label, count: d.count, total: totalSources };
+      }
+    });
+  }
 
   // Source stats for Donut chart
   const sourceStats = sources.map((s) => {
@@ -478,18 +502,50 @@ export function parseAndCalculateMetrics(apiResponse, options = {}) {
  * Main export: renderDataExposureReport
  * Directly takes apiResponse JSON and returns HTML string.
  */
-export function renderDataExposureReport(apiResponse, options = { unmask: false }) {
-  if (!apiResponse || !Array.isArray(apiResponse.results)) {
+export function renderDataExposureReport(apiResponse, options = { unmask: true }) {
+  if (!apiResponse || !Array.isArray(apiResponse.results) || apiResponse.results.length === 0) {
     return `
-      <div class="vismrit-empty-state">
-        <p>No valid lookup data available. Enter a phone number and click <strong>Look up</strong>.</p>
+      <div class="vismrit-report-wrapper" id="vismrit-report-wrapper">
+        <header class="report-header">
+          <div class="brand-left">
+            <div class="brand-logo">
+              <svg class="brand-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="#6366f1"></path>
+                <polyline points="9 12 11 14 15 10" stroke="#ffffff" stroke-width="2.5"></polyline>
+              </svg>
+            </div>
+            <h1 class="brand-title">Vismrit</h1>
+          </div>
+        </header>
+
+        <section class="vismrit-empty-card">
+          <div class="empty-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </div>
+          <h2 class="empty-title">No Search Results Found</h2>
+          <p class="empty-desc">We could not find any active data records for this query. The scanned scrapers returned no matching records.</p>
+        </section>
+
+        <footer class="report-bottom-nav">
+          <button type="button" class="btn-back-bottom" id="btn-back-home" title="Back" aria-label="Back">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            <span>Back</span>
+          </button>
+        </footer>
       </div>
     `;
   }
 
   const metrics = parseAndCalculateMetrics(apiResponse, options);
   const { sources, computedDetails } = metrics;
-  const isUnmasked = Boolean(options.unmask);
+  const isUnmasked = options.unmask !== false;
 
   const scannedDate = formatReportDate(apiResponse.searchedAt);
   const headline = `${metrics.detailsFoundCount} of ${metrics.totalDetails} details found`;
@@ -537,34 +593,22 @@ export function renderDataExposureReport(apiResponse, options = { unmask: false 
 
   // 3. Table Header Source Columns
   const tableHeadersHtml = sources
-    .map((s) => {
-      const hasEvidence = Boolean(s.evidence && (s.evidence.dataUrl || s.evidence.base64 || s.evidence.url));
-      return `
+    .map(
+      (s) => `
         <th class="col-center">
           <div class="source-header-cell">
             <span class="source-name-text">${s.name.toUpperCase()}</span>
-            ${
-              hasEvidence
-                ? `<button type="button" class="btn-evidence-badge" data-source-id="${s.id}" title="View captured screenshot evidence">
-                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                       <circle cx="12" cy="12" r="3"></circle>
-                     </svg>
-                     Evidence
-                   </button>`
-                : ""
-            }
           </div>
         </th>
-      `;
-    })
+      `
+    )
     .join("");
 
   // 4. Table Body Rows
   const tableRowsHtml = computedDetails
     .map((d) => {
       const iconSvg = getDetailIcon(d.id);
-      const displayValue = isUnmasked ? d.unmasked : d.masked;
+      const displayValue = d.count > 0 && d.unmasked ? d.unmasked : "—";
 
       const sourceColsHtml = sources
         .map((s) => {
@@ -644,24 +688,24 @@ export function renderDataExposureReport(apiResponse, options = { unmask: false 
         </div>
 
         <div class="header-actions-right">
-          <div class="scan-pill">
-            <svg class="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="8" y1="2" x2="8" y2="6"></line>
-              <line x1="3" y1="10" x2="21" y2="10"></line>
-            </svg>
-            <span>${scannedDate}</span>
-          </div>
-
-          <button type="button" class="btn-start-removal" id="btn-start-removal" title="Start digital footprint removal workflow">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              <line x1="10" y1="11" x2="10" y2="17"></line>
-              <line x1="14" y1="11" x2="14" y2="17"></line>
-            </svg>
-            Start removal
-          </button>
+          ${
+            metrics.totalFindings > 0
+              ? `<button type="button" class="btn-start-removal" id="btn-start-removal" title="Start digital footprint removal workflow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                  </svg>
+                  Start removal
+                </button>`
+              : `<div class="status-clean-badge" title="No exposure detected across scanned sources">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    <polyline points="9 12 11 14 15 10"></polyline>
+                  </svg>
+                  <span>All Clean</span>
+                </div>`
+          }
         </div>
       </header>
 
@@ -675,7 +719,6 @@ export function renderDataExposureReport(apiResponse, options = { unmask: false 
             ${metrics.exposureLevel}
           </span>
         </div>
-        <p class="headline-subtitle">${subtitle}</p>
       </section>
 
       <!-- 4 Top KPI Metric Cards -->
@@ -792,6 +835,17 @@ export function renderDataExposureReport(apiResponse, options = { unmask: false 
           </table>
         </div>
       </section>
+
+      <!-- Bottom Navigation (Back) -->
+      <footer class="report-bottom-nav">
+        <button type="button" class="btn-back-bottom" id="btn-back-home" title="Back" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+          <span>Back</span>
+        </button>
+      </footer>
     </div>
   `;
 }

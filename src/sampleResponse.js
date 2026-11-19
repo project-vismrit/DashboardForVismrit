@@ -60,22 +60,19 @@ const SAMPLE_EVIDENCE_GETCONTACT =
   `);
 
 export const SAMPLE_API_RESPONSE = {
-  phone: "+91 ****1641",
+  phone: "+91 98765 41641",
   searchedAt: "2026-10-26T06:12:37.014Z",
   results: [
     {
       source: "truecaller",
       status: "FOUND",
       data: {
-        name: "user_name",
-        carrier: "sim_name",
-        address: "..........",
-        email: "//.......",
+        name: "Amit Kumar",
+        carrier: "Jio 5G",
+        address: "Connaught Place, New Delhi",
+        email: "amit.kumar@gmail.com",
       },
-      evidence: {
-        mimeType: "image/svg+xml",
-        dataUrl: SAMPLE_EVIDENCE_TRUECALLER,
-      },
+      evidence: null,
       searchedAt: "2026-10-26T06:12:03.833Z",
       message: null,
     },
@@ -83,13 +80,10 @@ export const SAMPLE_API_RESPONSE = {
       source: "getcontact",
       status: "FOUND",
       data: {
-        name: "user_name",
-        sim: "sim_name",
+        name: "Amit Kumar",
+        sim: "Jio - 9876541641",
       },
-      evidence: {
-        mimeType: "image/svg+xml",
-        dataUrl: SAMPLE_EVIDENCE_GETCONTACT,
-      },
+      evidence: null,
       searchedAt: "2026-10-26T06:12:18.757Z",
       message: null,
     },
@@ -103,6 +97,35 @@ export const SAMPLE_API_RESPONSE = {
       },
       evidence: null,
       searchedAt: "2026-10-26T06:12:37.014Z",
+      message: "No results found for this number on JustDial.",
+    },
+  ],
+};
+
+// Default sample payload for when no results/exposure are found across any source
+export const SAMPLE_NOT_FOUND_RESPONSE = {
+  phone: "+91 99999 99999",
+  searchedAt: new Date().toISOString(),
+  results: [
+    {
+      source: "truecaller",
+      status: "NOT_FOUND",
+      data: {},
+      evidence: null,
+      message: "No profile found on Truecaller.",
+    },
+    {
+      source: "getcontact",
+      status: "NOT_FOUND",
+      data: {},
+      evidence: null,
+      message: "No tags or profile found on GetContact.",
+    },
+    {
+      source: "justdial",
+      status: "NOT_FOUND",
+      data: {},
+      evidence: null,
       message: "No results found for this number on JustDial.",
     },
   ],

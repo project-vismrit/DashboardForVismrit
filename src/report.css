@@ -286,6 +286,58 @@ body {
   letter-spacing: -0.3px;
 }
 
+/* --------------------------------------------------------------------------
+   Bottom Navigation (Back to Home)
+   -------------------------------------------------------------------------- */
+.report-bottom-nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 1.5rem 0 0.5rem;
+  width: 100%;
+}
+
+.btn-back-bottom {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  padding: 0.75rem 1.65rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  user-select: none;
+}
+
+.btn-back-bottom svg {
+  width: 17px;
+  height: 17px;
+  stroke: var(--text-muted);
+  transition: all 0.2s ease;
+}
+
+.btn-back-bottom:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-active);
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+.btn-back-bottom:hover svg {
+  stroke: #ffffff;
+  transform: translateX(-4px);
+}
+
+.btn-back-bottom:active {
+  transform: translateY(0);
+}
+
 .header-actions-right {
   display: flex;
   align-items: center;
@@ -416,6 +468,82 @@ body {
 .badge-low .badge-dot {
   background: #10b981;
   box-shadow: 0 0 8px #10b981;
+}
+
+.badge-clean {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+.badge-clean .badge-dot {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+.status-clean-badge {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: var(--radius-full);
+  color: #34d399;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.45rem 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-clean-badge svg {
+  width: 15px;
+  height: 15px;
+  stroke: #34d399;
+}
+
+/* --------------------------------------------------------------------------
+   Empty State Card (When no lookup data or results available)
+   -------------------------------------------------------------------------- */
+.vismrit-empty-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 4rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 1.25rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.empty-icon-box {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-icon-box svg {
+  width: 30px;
+  height: 30px;
+  stroke: #818cf8;
+}
+
+.empty-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.empty-desc {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  max-width: 480px;
+  line-height: 1.5;
 }
 
 .headline-subtitle {
@@ -1095,7 +1223,7 @@ body {
     padding: 0 !important;
   }
 
-  .app-controls-bar, .modal-overlay, .btn-evidence-badge, .btn-start-removal, .toast-msg {
+  .app-controls-bar, .modal-overlay, .btn-evidence-badge, .btn-start-removal, .toast-msg, .report-bottom-nav, .btn-back-bottom {
     display: none !important;
   }
 

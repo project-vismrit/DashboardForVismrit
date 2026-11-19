@@ -7,12 +7,12 @@
  * and the 'vismrit:start-removal' event.
  */
 
-import { SAMPLE_API_RESPONSE } from "./sampleResponse.js";
+import { SAMPLE_API_RESPONSE, SAMPLE_NOT_FOUND_RESPONSE } from "./sampleResponse.js";
 import { renderDataExposureReport, formatSourceName } from "./reportGenerator.js";
 
 // Application State
 let currentApiResponse = SAMPLE_API_RESPONSE;
-let isUnmasked = false;
+let isUnmasked = true;
 
 // DOM Elements: Main Toolbar
 const reportRoot = document.getElementById("report-root");
@@ -82,11 +82,10 @@ function renderCurrentReport() {
 /**
  * Perform lookup against the proxy server /api/lookup
  */
-async function performLookup() {
-  const rawPhone = inputPhone?.value?.trim() || "";
+async function performLookup(targetPhone) {
+  const rawPhone = (typeof targetPhone === "string" ? targetPhone : (inputPhone?.value || "")).trim();
   if (!rawPhone) {
-    showToast("Please enter a 10-digit mobile number.", "error");
-    inputPhone?.focus();
+    showToast("Please provide a valid 10-digit mobile number.", "error");
     return;
   }
 
@@ -366,6 +365,21 @@ jsonModal?.addEventListener("click", (e) => {
 
 // Event Delegation for dynamically rendered buttons inside #report-root
 reportRoot?.addEventListener("click", (e) => {
+  // 0. Back to Home Button Click
+  const backBtn = e.target.closest("#btn-back-home");
+  if (backBtn) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const homeUrl = urlParams.get("home");
+    if (homeUrl) {
+      window.location.href = homeUrl;
+    } else if (window.history.length > 1 && document.referrer) {
+      window.history.back();
+    } else {
+      window.location.href = "/";
+    }
+    return;
+  }
+
   // 1. Evidence Button Click
   const evidenceBtn = e.target.closest(".btn-evidence-badge");
   if (evidenceBtn) {
@@ -411,5 +425,29 @@ window.addEventListener("vismrit:start-removal", (event) => {
   );
 });
 
-// Initial Render on page load using SAMPLE_API_RESPONSE
-renderCurrentReport();
+// URL parameter controls:
+// - Default (no params) -> "No Search / Not Found" state (0% exposure, All Clean)
+// - ?view=found          -> Sample with findings (Amit Kumar, Truecaller, GetContact)
+// - ?view=empty          -> Minimal "No Search Results Found" card
+// - ?phone=9876541641    -> Live API lookup
+const urlParams = new URLSearchParams(window.location.search);
+const queryPhone = urlParams.get("phone");
+const viewMode = urlParams.get("view");
+
+if (viewMode === "found") {
+  currentApiResponse = SAMPLE_API_RESPONSE;
+} else if (viewMode === "empty") {
+  currentApiResponse = null;
+} else {
+  currentApiResponse = SAMPLE_NOT_FOUND_RESPONSE;
+}
+
+if (urlParams.get("unmask") === "true") {
+  isUnmasked = true;
+}
+
+if (queryPhone) {
+  performLookup(queryPhone);
+} else {
+  renderCurrentReport();
+}
